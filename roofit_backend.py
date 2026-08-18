@@ -84,8 +84,14 @@ class HS3TestSuiteBackend:
             self._apply_parameter_point(workspace, check["reference_point"])
             for name, value in zip(scan_parameters, point, strict=True):
                 var = workspace.var(name)
-                if var is None:
-                    raise AssertionError(f"scan parameter {name!r} not found")
+                if not var:
+                    var = workspace.arg(name)
+                    if not var:
+                        raise AssertionError(f"scan parameter {name!r} not found")
+                    if isinstance(var, self.ROOT.RooConstVar):
+                        print(f"skipping {name!r}: RooConstVar (value {var.getVal()})")
+                        continue
+                    raise AssertionError(f"parameter {name!r} is a {var.ClassName()}, not settable!")
                 var.setVal(float(value))
             with suppress_root_output():
                 values.append(2.0 * (float(combined_nll.getVal()) - reference))
@@ -119,8 +125,17 @@ class HS3TestSuiteBackend:
     def _apply_parameter_point(self, workspace, values: dict[str, float]) -> None:
         for name, value in values.items():
             var = workspace.var(name)
-            if var is not None:
-                var.setVal(float(value))
+            if not var:
+                var = workspace.arg(name)
+                if not var:
+                    raise AssertionError(f"parameter {name!r} not found")
+                if isinstance(var, self.ROOT.RooConstVar):
+                    print(f"skipping {name!r}: RooConstVar (value {var.getVal()})")
+                    continue
+                raise AssertionError(
+                    f"parameter {name!r} is a {var.ClassName()}, not settable!"
+                )
+            var.setVal(float(value))
 
 
 @contextmanager
