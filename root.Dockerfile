@@ -9,8 +9,12 @@ RUN mkdir -p /root-build/root_src /root-build/build /opt/root \
     && git remote add origin https://github.com/root-project/root.git \
     && git fetch --depth=1 origin ${ROOT_COMMIT_SHA} \
     && git checkout -q FETCH_HEAD \
-    && cd /root-build/build && cmake -DCMAKE_INSTALL_PREFIX=/opt/root /root-build/root_src \
-    && cd /root-build/build && cmake --build . --target install -j 4 \
+    && cd /root-build/build \
+    && cmake -DCMAKE_INSTALL_PREFIX=/opt/root \
+             -DCMAKE_BUILD_TYPE=Release \
+             -Dminimal=ON -Droofit=ON -Dpyroot=ON \
+             /root-build/root_src \
+    && cmake --build . --target install -j 4 \
     && rm -rf /root-build
 
 ENV ROOTSYS=/opt/root
