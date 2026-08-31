@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
+import json
 import os
 from pathlib import Path
 import sys
 from typing import Any
 
-from ..manifest import load_json
+
+def load_json(path: Path) -> Any:
+    with Path(path).open("r", encoding="utf-8") as handle:
+        return json.load(handle)
 
 
 class RooFitBackend:
@@ -26,6 +30,17 @@ class RooFitBackend:
         with suppress_root_output():
             tool.importJSON(str(path))
         return ws
+
+    def upconvert(
+        self, input_path: Path, output_path: Path, *, verbose: bool = False
+    ) -> None:
+        workspace = self.ROOT.RooWorkspace("hs3suite_upconvert_ws")
+        tool = self.ROOT.RooJSONFactoryWSTool(workspace)
+        with nullcontext() if verbose else suppress_root_output():
+            if not tool.importJSON(str(input_path)):
+                raise RuntimeError(f"RooFit importJSON failed for {input_path}")
+            if not tool.exportJSON(str(output_path)):
+                raise RuntimeError(f"RooFit exportJSON failed for {output_path}")
 
     def structure(self, workspace) -> dict[str, list[str]]:
         return {
