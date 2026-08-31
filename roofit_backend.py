@@ -157,6 +157,9 @@ class RooFitBackend:
                 )
             var.setVal(float(value))
 
+# enable falling back to default backend class name
+HS3TestSuiteBackend = RooFitBackend
+
 
 @contextmanager
 def suppress_root_output():
