@@ -5,10 +5,11 @@ import os
 from pathlib import Path
 import sys
 from typing import Any
-import json
+
+from ..manifest import load_json
 
 
-class HS3TestSuiteBackend:
+class RooFitBackend:
     name = "roofit"
 
     def __init__(self) -> None:
@@ -42,9 +43,7 @@ class HS3TestSuiteBackend:
             if missing:
                 raise AssertionError(f"missing {key}: {sorted(missing)}")
 
-    def run_twice_delta_nll_scan(
-        self, workspace, check: dict[str, Any], hs3_path: Path
-    ) -> list[float]:
+    def run_twice_delta_nll_scan(self, workspace, check: dict[str, Any], hs3_path: Path) -> list[float]:
         target = check["target"]
         pairs = self._resolve_target_pairs(target, hs3_path)
         pdf_data_objs = []
@@ -60,11 +59,7 @@ class HS3TestSuiteBackend:
         self._apply_parameter_point(workspace, check["reference_point"])
         with suppress_root_output():
             nlls = [
-                pdf.createNLL(
-                    data,
-                    self.ROOT.RooFit.NumCPU(1),
-                    self.ROOT.RooFit.EvalBackend("legacy"),
-                )
+                pdf.createNLL(data, self.ROOT.RooFit.NumCPU(1), self.ROOT.RooFit.EvalBackend("legacy"))
                 for pdf, data in pdf_data_objs
             ]
             if len(nlls) == 1:
@@ -97,28 +92,53 @@ class HS3TestSuiteBackend:
                 values.append(2.0 * (float(combined_nll.getVal()) - reference))
         return values
 
-    def _resolve_target_pairs(
-        self, target: dict[str, Any], hs3_path: Path
-    ) -> list[tuple[str, str]]:
-        if "likelihood" in target:
-            with hs3_path.open("r", encoding="utf-8") as handle:
-                payload = json.load(handle)
+    def run_pdf_scan(self, workspace, check: dict[str, Any], hs3_path: Path) -> list[float]:
+        target = check["target"]
+        pdf = workspace.pdf(target["pdf"])
+        if not pdf:
+            raise AssertionError(f"PDF {target['pdf']!r} not found")
+        norm_set = self.ROOT.RooArgSet()
+        for name in target["observables"]:
+            observable = workspace.var(name)
+            if not observable:
+                raise AssertionError(f"observable {name!r} not found or not a variable")
+            norm_set.add(observable)
+        return self._scan(workspace, check, lambda: float(pdf.getVal(norm_set)))
 
+    def run_function_scan(self, workspace, check: dict[str, Any], hs3_path: Path) -> list[float]:
+        name = check["target"]["function"]
+        func = workspace.function(name) or workspace.arg(name)
+        if not func:
+            raise AssertionError(f"function {name!r} not found")
+        # A RooAbsReal carries no normalisation, so its raw value is already comparable.
+        return self._scan(workspace, check, lambda: float(func.getVal()))
+
+    def _scan(self, workspace, check: dict[str, Any], evaluate) -> list[float]:
+        """Evaluate ``evaluate`` at each scan point, re-applying the reference point first."""
+        values: list[float] = []
+        scan_parameters = check["scan_parameters"]
+        for point in check["scan_points"]:
+            self._apply_parameter_point(workspace, check["reference_point"])
+            self._apply_parameter_point(
+                workspace, dict(zip(scan_parameters, point, strict=True))
+            )
+            with suppress_root_output():
+                values.append(evaluate())
+        return values
+
+    def _resolve_target_pairs(self, target: dict[str, Any], hs3_path: Path) -> list[tuple[str, str]]:
+        if "likelihood" in target:
+            payload = load_json(hs3_path)
             name = target["likelihood"]
             entry = next(
-                (e for e in payload.get("likelihoods", []) if e.get("name") == name),
-                None,
+                (e for e in payload.get("likelihoods", []) if e.get("name") == name), None
             )
             if entry is None:
-                raise AssertionError(
-                    f"likelihood {name!r} not found in {hs3_path}'s 'likelihoods' section"
-                )
+                raise AssertionError(f"likelihood {name!r} not found in {hs3_path}'s 'likelihoods' section")
             distributions = entry["distributions"]
             data = entry["data"]
             if len(distributions) != len(data):
-                raise AssertionError(
-                    f"likelihood {name!r}: distributions/data length mismatch"
-                )
+                raise AssertionError(f"likelihood {name!r}: distributions/data length mismatch")
             return list(zip(distributions, data, strict=True))
         return [(target["pdf"], target["data"])]
 
