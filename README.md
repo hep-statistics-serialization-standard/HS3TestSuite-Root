@@ -5,9 +5,8 @@ Not a library — it produces a container with ROOT/RooFit plus the two things t
 
 | File | Role |
 | --- | --- |
-| `root.Dockerfile` | Base image, ROOT from a pinned commit (slow) |
-| `root-release.Dockerfile` | Base image, official ROOT binary release (fast) |
-| `roofit.Dockerfile` | The product: base + backend plugin + `generate-fixtures` |
+| `roofit.Dockerfile` | The product: ROOT base + backend plugin + `generate-fixtures` |
+| `.github/workflows/build-image.yaml` | Manual build + push to GHCR |
 | `roofit_backend.py` | RooFit implementation of the backend contract |
 | `generate-fixtures.sh` | The `generate-fixtures` executable CI requires |
 
@@ -30,8 +29,9 @@ The wrapper just forwards to the suite's own tool, vendored in the workspace at 
 ## Build
 
 ```bash
-docker build -f root-release.Dockerfile -t root-release:6.40.02 .   # or root.Dockerfile
-docker build -f roofit.Dockerfile -t hs3testsuite-roofit:<tag> .
+docker build --platform linux/amd64 -f roofit.Dockerfile --build-arg ROOT_TAG=v6-40-04 -t hs3testsuite-roofit:v6-40-04 .
 ```
 
-`roofit.Dockerfile` pins its base in the `FROM` line (`stalbrec/root:e3a793`) — to use another base, edit that line or retag. Tags follow the ROOT identity built against, since fixtures pin the exact image that generated them. Both bases set `CLING_STANDARD_PCH=none` deliberately; don't drop it.
+The base is `registry.cern.ch/hs3-root/root-release:<ROOT_TAG>` (public, built by `hs3-docker-files` on gitlab.cern.ch; tags are ROOT release tags like `v6-40-04`). It sets `CLING_STANDARD_PCH=none` deliberately.
+
+To publish, run the *Build image* workflow from the Actions tab with a `root_tag`. It pushes `ghcr.io/hep-statistics-serialization-standard/hs3testsuite-roofit:<tag>` and prints the digest in the job summary. Pin fixtures to that `@sha256:` digest, since fixtures pin the exact image that generated them.

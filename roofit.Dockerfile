@@ -1,4 +1,5 @@
-FROM stalbrec/root:e3a793
+ARG ROOT_TAG=v6-40-04
+FROM registry.cern.ch/hs3-root/root-release:${ROOT_TAG}
 
 ENV PYTHONPATH=/opt/hs3testsuite:${PYTHONPATH}
 
