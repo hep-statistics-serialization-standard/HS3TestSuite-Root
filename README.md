@@ -13,11 +13,11 @@ Not a library — it produces a container with ROOT/RooFit plus the two things t
 ## The two seams
 
 **`generate-fixtures` on `$PATH`.** CI starts a job container from the image reference in a fixture's `metadata.json: reference_backend`, then `docker exec`s `generate-fixtures <fixture-dir>`. 
-GitHub Actions never runs a job container's `ENTRYPOINT`, so this must be a real executable. It writes `expected.json` and *extends* `manifest.json` — both into the fixture dir it is handed, so point trial runs at a throwaway copy of a suite checkout, never the real one. 
+GitHub Actions never runs a job container's `ENTRYPOINT`, so this must be a real executable. It writes `expected.json` and *extends* `manifest.json`. 
 The wrapper just forwards to the suite's own tool, vendored in the workspace at `.hs3suite/`, so `GITHUB_WORKSPACE` must be set. Since `reference_backend` is used directly as an image ref, pin `...@sha256:...` rather than a tag.
 
-**The `hs3suite_backend` plugin.** Upstream does `from hs3suite_backend import HS3TestSuiteBackend`, falling back to its builtin on ImportError. `roofit.Dockerfile` installs `roofit_backend.py` as `/opt/hs3testsuite/hs3suite_backend.py` and puts that dir on `PYTHONPATH`. 
-**Both names are load-bearing** — rename the installed module or the class and it silently falls back to the builtin (the upstream `except` is bare).
+**The `hs3suite_backend` plugin.** Upstream does `from hs3suite_backend import HS3TestSuiteBackend`. `roofit.Dockerfile` installs `roofit_backend.py` as `/opt/hs3testsuite/hs3suite_backend.py` and puts that dir on `PYTHONPATH`. 
+**Both names are load-bearing**: If you rename the installed module or the class and upstream will fail with ImportError.
 
 ## Editing `roofit_backend.py`
 
@@ -32,6 +32,6 @@ The wrapper just forwards to the suite's own tool, vendored in the workspace at 
 docker build --platform linux/amd64 -f roofit.Dockerfile --build-arg ROOT_TAG=v6-40-04 -t hs3testsuite-roofit:v6-40-04 .
 ```
 
-The base is `registry.cern.ch/hs3-root/root-release:<ROOT_TAG>` (public, built by `hs3-docker-files` on gitlab.cern.ch; tags are ROOT release tags like `v6-40-04`). It sets `CLING_STANDARD_PCH=none` deliberately.
+The base is `registry.cern.ch/hs3-root/root-release:<ROOT_TAG>` (public, built by `hs3-docker-files` on gitlab.cern.ch; tags are ROOT release tags like `v6-40-04` and are immutable per Harbour policies.).
 
 To publish, run the *Build image* workflow from the Actions tab with a `root_tag`. It pushes `ghcr.io/hep-statistics-serialization-standard/hs3testsuite-roofit:<tag>` and prints the digest in the job summary. Pin fixtures to that `@sha256:` digest, since fixtures pin the exact image that generated them.
